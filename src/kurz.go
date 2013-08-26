@@ -34,6 +34,8 @@ type KurzUrl struct {
 	Key          string
 	ShortUrl     string
 	LongUrl      string
+	UserId       string
+	Type         string
 	CreationDate int64
 	Clicks       int64
 }
@@ -46,21 +48,25 @@ func (k KurzUrl) Json() []byte {
 
 // Creates a new KurzUrl instance. The Given key, shorturl and longurl will
 // be used. Clicks will be set to 0 and CreationDate to time.Nanoseconds()
-func NewKurzUrl(key, shorturl, longurl string) *KurzUrl {
+func NewKurzUrl(key, shorturl, longurl, user, etype string) *KurzUrl {
 	kurl := new(KurzUrl)
 	kurl.CreationDate = time.Now().UnixNano()
 	kurl.Key = key
 	kurl.LongUrl = longurl
 	kurl.ShortUrl = shorturl
+	kurl.UserId = user
+	kurl.Type = etype
 	kurl.Clicks = 0
 	return kurl
 }
 
 // stores a new KurzUrl for the given key, shorturl and longurl. Existing
 // ones with the same url will be overwritten
-func store(key, shorturl, longurl string) *KurzUrl {
-	kurl := NewKurzUrl(key, shorturl, longurl)
+func store(key, shorturl, longurl, user, etype string) *KurzUrl {
+	kurl := NewKurzUrl(key, shorturl, longurl, user, etype)
 	go redis.Hset(kurl.Key, "LongUrl", kurl.LongUrl)
+	go redis.Hset(kurl.Key, "UserId", kurl.UserId)
+	go redis.Hset(kurl.Key, "Type", kurl.Type)
 	go redis.Hset(kurl.Key, "ShortUrl", kurl.ShortUrl)
 	go redis.Hset(kurl.Key, "CreationDate", kurl.CreationDate)
 	go redis.Hset(kurl.Key, "Clicks", kurl.Clicks)
@@ -73,10 +79,11 @@ func load(key string) (*KurzUrl, error) {
 	if ok, _ := redis.Hexists(key, "ShortUrl"); ok {
 		kurl := new(KurzUrl)
 		kurl.Key = key
-		reply, _ := redis.Hmget(key, "LongUrl", "ShortUrl", "CreationDate", "Clicks")
-		kurl.LongUrl, kurl.ShortUrl, kurl.CreationDate, kurl.Clicks =
+		reply, _ := redis.Hmget(key, "LongUrl", "UserId", "Type", "ShortUrl", "CreationDate", "Clicks")
+		kurl.LongUrl, kurl.UserId, kurl.Type, kurl.ShortUrl, kurl.CreationDate, kurl.Clicks =
 			reply.Elems[0].Elem.String(), reply.Elems[1].Elem.String(),
-			reply.Elems[2].Elem.Int64(), reply.Elems[3].Elem.Int64()
+ 			reply.Elems[2].Elem.String(), reply.Elems[3].Elem.String(),
+			reply.Elems[4].Elem.Int64(), reply.Elems[5].Elem.Int64()
 		return kurl, nil
 	}
 	return nil, errors.New("unknown key: " + key)
@@ -136,13 +143,17 @@ func isValidUrl(rawurl string) (u *url.URL, err error) {
 // function to shorten and store a url
 func shorten(w http.ResponseWriter, r *http.Request) {
 	host := config.GetStringDefault("hostname", "localhost")
-	leUrl := r.FormValue("url")
+	leUrl := r.PostFormValue("url")
+	fmt.Println(leUrl)
 	theUrl, err := isValidUrl(string(leUrl))
+	userId := r.PostFormValue("user")
+	fmt.Println(userId)
+	etype := r.PostFormValue("type")
 	if err == nil {
 		ctr, _ := redis.Incr(COUNTER)
 		encoded := Encode(ctr)
 		location := fmt.Sprintf("%s://%s/%s", HTTP, host, encoded)
-		store(encoded, location, theUrl.String())
+		store(encoded, location, theUrl.String(), userId, etype)
 
 		home := r.FormValue("home")
 		if home != "" {
@@ -154,6 +165,35 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(w, r, ROLL, http.StatusNotFound)
 	}
+}
+
+//Returns a json array with information about the last shortened urls. If data 
+// is a valid integer, that's the amount of data it will return, otherwise
+// a maximum of 10 entries will be returned.
+func userStats(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	fmt.Println(id)
+	c, _ := redis.Get(COUNTER)
+	last := c.Int64()
+	w.Header().Set("Content-Type", "application/json")
+	stats := make(map[string]int)
+        invites := 0
+        //shares := 0
+        //attends := 0
+	for i := last; i > 0; i -= 1 {
+	    kurl, err := load(Encode(i))
+    	    if err == nil {
+		if kurl.UserId == id {
+		    if kurl.Type == "invite"{
+			invites += 1
+		    }
+		}
+	    }
+	}
+	stats["invites"] = invites
+	fmt.Println(stats)
+	s, _ := json.Marshal(stats)
+	w.Write(s)
 }
 
 //Returns a json array with information about the last shortened urls. If data 
@@ -217,6 +257,7 @@ func main() {
 	router.HandleFunc("/{short:([a-zA-Z0-9]+)\\+$}", info)
 	router.HandleFunc("/info/{short:[a-zA-Z0-9]+}", info)
 	router.HandleFunc("/latest/{data:[0-9]+}", latest)
+	router.HandleFunc("/user/{id:(.*$)}", userStats)
 
 	router.HandleFunc("/{fileName:(.*$)}", static)
 
