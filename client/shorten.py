@@ -4,6 +4,7 @@ import urllib2
 
 
 link = "https://github.com/miha-stopar"
+link = "https://github.com/"
 data = {"url" : link, "user" : "3232", "type":"invite"}
 enc_data = urllib.urlencode(data)
 url = "http://localhost:9999/shorten/"

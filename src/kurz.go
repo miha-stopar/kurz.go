@@ -117,9 +117,10 @@ func info(w http.ResponseWriter, r *http.Request) {
 
 // function to resolve a shorturl and redirect
 func resolve(w http.ResponseWriter, r *http.Request) {
-
 	short := mux.Vars(r)["short"]
 	kurl, err := load(short)
+	fmt.Println(kurl)
+	fmt.Println(err)
 	if err == nil {
 		go redis.Hincrby(kurl.Key, "Clicks", 1)
 		http.Redirect(w, r, kurl.LongUrl, http.StatusMovedPermanently)
@@ -143,12 +144,12 @@ func isValidUrl(rawurl string) (u *url.URL, err error) {
 // function to shorten and store a url
 func shorten(w http.ResponseWriter, r *http.Request) {
 	host := config.GetStringDefault("hostname", "localhost")
-	leUrl := r.PostFormValue("url")
+	leUrl := r.FormValue("url")
 	fmt.Println(leUrl)
 	theUrl, err := isValidUrl(string(leUrl))
-	userId := r.PostFormValue("user")
+	userId := r.FormValue("user")
 	fmt.Println(userId)
-	etype := r.PostFormValue("type")
+	etype := r.FormValue("type")
 	if err == nil {
 		ctr, _ := redis.Incr(COUNTER)
 		encoded := Encode(ctr)
@@ -167,34 +168,83 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//Returns a json array with information about the last shortened urls. If data 
-// is a valid integer, that's the amount of data it will return, otherwise
-// a maximum of 10 entries will be returned.
 func userStats(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	id := r.FormValue("id")
 	fmt.Println(id)
 	c, _ := redis.Get(COUNTER)
 	last := c.Int64()
 	w.Header().Set("Content-Type", "application/json")
-	stats := make(map[string]int)
-        invites := 0
-        //shares := 0
-        //attends := 0
+	stats := make(map[string]map[string]int64)
+        invites := make(map[string]int64)
+        shares := make(map[string]int64)
+        attends := make(map[string]int64)
 	for i := last; i > 0; i -= 1 {
 	    kurl, err := load(Encode(i))
     	    if err == nil {
 		if kurl.UserId == id {
 		    if kurl.Type == "invite"{
-			invites += 1
+			invites[kurl.LongUrl] = kurl.Clicks
+		    }
+		    if kurl.Type == "share"{
+			shares[kurl.LongUrl] = kurl.Clicks
+		    }
+		    if kurl.Type == "attend"{
+			attends[kurl.LongUrl] = kurl.Clicks
 		    }
 		}
 	    }
 	}
 	stats["invites"] = invites
+	stats["shares"] = shares
+	stats["attends"] = attends
 	fmt.Println(stats)
 	s, _ := json.Marshal(stats)
 	w.Write(s)
 }
+
+func eventStats(w http.ResponseWriter, r *http.Request) {
+	url := r.FormValue("url")
+	fmt.Println(url)
+	c, _ := redis.Get(COUNTER)
+	last := c.Int64()
+	w.Header().Set("Content-Type", "application/json")
+	stats := make(map[string]int64)
+        var invitesCount int64 = 0
+        var invitesClicks int64 = 0
+        var sharesCount int64 = 0
+        var sharesClicks int64 = 0
+        var attendsCount int64 = 0
+        var attendsClicks int64 = 0
+	for i := last; i > 0; i -= 1 {
+	    kurl, err := load(Encode(i))
+    	    if err == nil {
+		if kurl.LongUrl == url {
+		    if kurl.Type == "invite"{
+			invitesCount += 1
+			invitesClicks += kurl.Clicks
+		    }
+		    if kurl.Type == "share"{
+			sharesCount += 1
+			sharesClicks += kurl.Clicks
+		    }
+		    if kurl.Type == "attend"{
+			attendsCount += 1
+			attendsClicks += kurl.Clicks
+		    }
+		}
+	    }
+	}
+	stats["invitesCount"] = invitesCount
+	stats["sharesCount"] = sharesCount
+	stats["attendsCount"] = attendsCount
+	stats["invitesClicks"] = invitesClicks
+	stats["sharesClicks"] = sharesClicks
+	stats["attendsClicks"] = attendsClicks
+	fmt.Println(stats)
+	s, _ := json.Marshal(stats)
+	w.Write(s)
+}
+
 
 //Returns a json array with information about the last shortened urls. If data 
 // is a valid integer, that's the amount of data it will return, otherwise
@@ -253,11 +303,12 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/shorten/{url:(.*$)}", shorten)
 
-	router.HandleFunc("/{short:([a-zA-Z0-9]+$)}", resolve)
+	router.HandleFunc("/{short:([a-zA-Z0-9]+)}", resolve)
 	router.HandleFunc("/{short:([a-zA-Z0-9]+)\\+$}", info)
 	router.HandleFunc("/info/{short:[a-zA-Z0-9]+}", info)
 	router.HandleFunc("/latest/{data:[0-9]+}", latest)
 	router.HandleFunc("/user/{id:(.*$)}", userStats)
+	router.HandleFunc("/event/{url:(.*$)}", eventStats)
 
 	router.HandleFunc("/{fileName:(.*$)}", static)
 
