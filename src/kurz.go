@@ -22,7 +22,7 @@ const (
 	// special key in redis, that is our global counter
 	COUNTER = "__counter__"
 	HTTP    = "http"
-	ROLL    = "https://www.youtube.com/watch?v=jRHmvy5eaG4"
+	ROLL    = "http://localhost:9999/index.htm"
 )
 
 var (
@@ -123,9 +123,10 @@ func resolve(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(err)
 	if err == nil {
 		go redis.Hincrby(kurl.Key, "Clicks", 1)
-		http.Redirect(w, r, kurl.LongUrl, http.StatusMovedPermanently)
+		//http.Redirect(w, r, kurl.LongUrl, http.StatusMovedPermanently)
+		http.Redirect(w, r, kurl.LongUrl, http.StatusTemporaryRedirect)
 	} else {
-		http.Redirect(w, r, ROLL, http.StatusMovedPermanently)
+		http.Redirect(w, r, ROLL, http.StatusTemporaryRedirect)
 	}
 }
 
@@ -154,15 +155,10 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 		ctr, _ := redis.Incr(COUNTER)
 		encoded := Encode(ctr)
 		location := fmt.Sprintf("%s://%s/%s", HTTP, host, encoded)
-		store(encoded, location, theUrl.String(), userId, etype)
-
-		home := r.FormValue("home")
-		if home != "" {
-			http.Redirect(w, r, "/", http.StatusMovedPermanently)
-		} else {
-			// redirect to the info page
-			http.Redirect(w, r, location+"+", http.StatusMovedPermanently)
-		}
+		kurl := store(encoded, location, theUrl.String(), userId, etype)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(kurl.Json())
+		io.WriteString(w, "\n")
 	} else {
 		http.Redirect(w, r, ROLL, http.StatusNotFound)
 	}
@@ -303,7 +299,7 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/shorten/{url:(.*$)}", shorten)
 
-	router.HandleFunc("/{short:([a-zA-Z0-9]+)}", resolve)
+	router.HandleFunc("/{short:([a-zA-Z0-9]+$)}", resolve)
 	router.HandleFunc("/{short:([a-zA-Z0-9]+)\\+$}", info)
 	router.HandleFunc("/info/{short:[a-zA-Z0-9]+}", info)
 	router.HandleFunc("/latest/{data:[0-9]+}", latest)

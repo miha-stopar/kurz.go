@@ -4,6 +4,73 @@
 |__|__|_____|__| |_____|__|___  |_____|
                           |_____| by @fs111
 
+kurz.go - fork with some additional parameters (UserId, URL type) and slightly extended API
+--------------------------------
+
+.. image:: https://raw.github.com/miha-stopar/kurz.go/master/kurzgo.png
+
+See client directory for some sample Python clients:
+
+* shorten:
+
+::
+
+	import requests
+	import urllib
+	import urllib2
+
+	url = "http://localhost:9999/shorten/"
+	link = "https://github.com/" + str(4)
+	typ = "attend"
+	data = {"url" : link, "user" : str(105), "type":typ}
+	enc_data = urllib.urlencode(data)
+	u = urllib2.urlopen(url, enc_data)
+	print u.read()
+
+* user stats:
+
+::
+
+	import requests
+	import urllib
+	import urllib2
+	import json
+
+	url = "http://localhost:9999/user/"
+	uid = str(105)
+	print "user id: %s" % uid
+	data = {"id" : uid}
+	enc_data = urllib.urlencode(data)
+	u = urllib2.urlopen(url, enc_data)
+	j = u.read()
+	js = json.loads(j)
+	print js
+	# prints out:
+	# user id: 105
+	#{u'attends': {u'https://github.com/4': 1}, u'invites': {}, u'shares': {u'https://github.com/5': 4}}
+
+* event stats:
+
+::
+
+	import requests
+	import urllib
+	import urllib2
+	import json
+
+	url = "https://github.com/%s" % str(4)
+	print "event url: %s" % url
+	data = {"url" : url}
+	enc_data = urllib.urlencode(data)
+	eurl = "http://localhost:9999/event/"
+	u = urllib2.urlopen(eurl, enc_data)
+	j = u.read()
+	js = json.loads(j)
+	print js
+	# prints out:
+	#{u'invitesCount': 1, u'invitesClicks': 3, u'sharesCount': 0, u'attendsCount': 1, u'attendsClicks': 1, u'sharesClicks': 0}
+
+
 kurz.go - a url shortener in go
 --------------------------------
 
