@@ -1,10 +1,7 @@
- __                                    
- |  |--.--.--.----.-----.  .-----.-----.
- |    <|  |  |   _|-- __|__|  _  |  _  |
- |__|__|_____|__| |_____|__|___  |_____|
-                           |_____| by @fs111
+kurz.go
+======
 
-kurz.go - fork with some additional parameters (UserId, URL type) and slightly extended API
+kurz.go fork with some additional parameters (UserId, URL type) and slightly extended API
 --------------------------------
 
 .. image:: https://raw.github.com/miha-stopar/kurz.go/master/kurzgo.png
