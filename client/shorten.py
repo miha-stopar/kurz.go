@@ -11,7 +11,7 @@ for i in range(5):
 	    typ = "share"
 	else:
 	    typ = "attend"
-	data = {"url" : link, "user" : str(101+i), "type":typ}
+	data = {"url" : link, "eventid": str(201+i), "user" : str(101+i), "type":typ}
 	enc_data = urllib.urlencode(data)
 	u = urllib2.urlopen(url, enc_data)
 	print u.read()
