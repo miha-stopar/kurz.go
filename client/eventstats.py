@@ -4,9 +4,9 @@ import urllib2
 import json
 
 for i in range(5):
-	url = "https://github.com/%s" % str(i+1)
-	print "event url: %s" % url
-	data = {"url" : url}
+	eid = str(201 + i)
+	print "event id: %s" % eid
+	data = {"eventid" :eid}
 	enc_data = urllib.urlencode(data)
 	eurl = "http://localhost:9999/event/"
 	u = urllib2.urlopen(eurl, enc_data)

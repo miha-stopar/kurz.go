@@ -1,12 +1,11 @@
 kurz.go
 ======
 
-kurz.go fork with some additional parameters (UserId, URL type) and slightly extended API
---------------------------------
+kurz.go fork with some additional parameters (EventId, UserId, URL type) and extended API
 
 .. image:: https://raw.github.com/miha-stopar/kurz.go/master/kurzgo.png
 
-See client directory for some sample Python clients:
+See client directory for sample Python clients:
 
 * shorten:
 
@@ -17,9 +16,9 @@ See client directory for some sample Python clients:
 	import urllib2
 
 	url = "http://localhost:9999/shorten/"
-	link = "https://github.com/" + str(4)
+	link = "https://github.com/"
 	typ = "attend"
-	data = {"url" : link, "user" : str(105), "type":typ}
+	data = {"url" : link, "user" : str(105), "eventid":"23", "type":typ}
 	enc_data = urllib.urlencode(data)
 	u = urllib2.urlopen(url, enc_data)
 	print u.read()
@@ -55,9 +54,9 @@ See client directory for some sample Python clients:
 	import urllib2
 	import json
 
-	url = "https://github.com/%s" % str(4)
-	print "event url: %s" % url
-	data = {"url" : url}
+        eid = str("23")
+	print "event id: %s" % eid
+	data = {"eventid" : eid}
 	enc_data = urllib.urlencode(data)
 	eurl = "http://localhost:9999/event/"
 	u = urllib2.urlopen(eurl, enc_data)

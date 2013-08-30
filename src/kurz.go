@@ -124,11 +124,9 @@ func info(w http.ResponseWriter, r *http.Request) {
 func resolve(w http.ResponseWriter, r *http.Request) {
 	short := mux.Vars(r)["short"]
 	kurl, err := load(short)
-	fmt.Println(kurl)
-	fmt.Println(err)
 	if err == nil {
 		go redis.Hincrby(kurl.Key, "Clicks", 1)
-		newClick(kurl.UserId, kurl.EventId, kurl.Type)
+		newClick(kurl.UserId, kurl.EventId, kurl.LongUrl, kurl.Type)
 		//http.Redirect(w, r, kurl.LongUrl, http.StatusMovedPermanently)
 		http.Redirect(w, r, kurl.LongUrl, http.StatusTemporaryRedirect)
 	} else {
@@ -148,17 +146,17 @@ func isValidUrl(rawurl string) (u *url.URL, err error) {
 	return url.Parse(rawurl)
 }
 
-func updateUser(userId string, etype string) {
-    key := "user_" + userId
-    if ok, _ := redis.Hexists(key, "InviteCount"); ok {
-	if etype == "invite"{
-	    go redis.Hincrby(key, "InviteCount", 1)
-	} else if etype == "share"{
-	    go redis.Hincrby(key, "ShareCount", 1)
-	} else if etype == "attend"{
-	    go redis.Hincrby(key, "AttendCount", 1)
-	}
-    } else {
+func newUrl(userId string, eventId string, longUrl string, etype string) {
+    bkey := "user_" + userId + "_"
+    if etype == "invite" {
+	go redis.Hset(bkey + "invite", longUrl, 0)
+    } else if etype == "share" {
+	go redis.Hset(bkey + "share", longUrl, 0)
+    } else if etype == "attend" {
+	go redis.Hset(bkey + "attend", longUrl, 0)
+    }
+    key := "event_" + eventId
+    if ok, _ := redis.Hexists(key, "InviteCount"); !ok {
 	go redis.Hset(key, "InviteCount", 0)
 	go redis.Hset(key, "InviteClicks", 0)
 	go redis.Hset(key, "ShareCount", 0)
@@ -166,70 +164,68 @@ func updateUser(userId string, etype string) {
 	go redis.Hset(key, "AttendCount", 0)
 	go redis.Hset(key, "AttendClicks", 0)
     }
-}
-
-func newUrl(userId string, eventId string, etype string) {
-    userKey := "user_" + userId
-    newUrlUpdate(userKey, etype)
-    eventKey := "event_" + eventId
-    newUrlUpdate(eventKey, etype)
-}
-
-func newClick(userId string, eventId string, etype string) {
-    userKey := "user_" + userId
-    newClickUpdate(userKey, etype)
-    eventKey := "event_" + eventId
-    newClickUpdate(eventKey, etype)
-}
-
-func newClickUpdate(key, etype string) {
-    if etype == "invite"{
-        go redis.Hincrby(key, "InviteClicks", 1)
-    } else if etype == "share"{
-        go redis.Hincrby(key, "ShareClicks", 1)
-    } else if etype == "attend"{
-        go redis.Hincrby(key, "AttendClicks", 1)
+    if etype == "invite" {
+	go redis.Hincrby(key, "InviteCount", 1)
+    } else if etype == "share" {
+	go redis.Hincrby(key, "ShareCount", 1)
+    } else if etype == "attend" {
+	go redis.Hincrby(key, "AttendCount", 1)
     }
 }
 
-func newUrlUpdate(key, etype string) {
-    if ok, _ := redis.Hexists(key, "InviteCount"); ok {
-	if etype == "invite"{
-	    go redis.Hincrby(key, "InviteCount", 1)
-	} else if etype == "share"{
-	    go redis.Hincrby(key, "ShareCount", 1)
-	} else if etype == "attend"{
-	    go redis.Hincrby(key, "AttendCount", 1)
-	}
-    } else {
-	go redis.Hset(key, "InviteCount", 1)
-	go redis.Hset(key, "InviteClicks", 0)
-	go redis.Hset(key, "ShareCount", 1)
-	go redis.Hset(key, "ShareClicks", 0)
-	go redis.Hset(key, "AttendCount", 1)
-	go redis.Hset(key, "AttendClicks", 0)
+func newClick(userId string, eventId string, longUrl string, etype string) {
+    bkey := "user_" + userId + "_"
+    key := "event_" + eventId
+    if etype == "invite" {
+	go redis.Hincrby(bkey + "invite", longUrl, 1)
+	go redis.Hincrby(key, "InviteClicks", 1)
+    } else if etype == "share" {
+	go redis.Hincrby(bkey + "share", longUrl, 1)
+	go redis.Hincrby(key, "ShareClicks", 1)
+    } else if etype == "attend" {
+	go redis.Hincrby(bkey + "attend", longUrl, 1)
+	go redis.Hincrby(key, "AttendClicks", 1)
     }
 }
 
 // function to shorten and store a url
 func shorten(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	host := config.GetStringDefault("hostname", "localhost")
 	leUrl := r.FormValue("url")
-	fmt.Println(leUrl)
 	eventId := r.FormValue("eventid")
 	theUrl, err := isValidUrl(string(leUrl))
 	userId := r.FormValue("user")
-	fmt.Println(userId)
 	etype := r.FormValue("type")
+	if (etype != "attend") && (etype != "invite") && (etype != "share"){
+	    message := make(map[string]string)
+	    message["error"] = fmt.Sprintf("%s type does not exist", etype)
+	    b, _ := json.Marshal(message)
+	    w.Write(b)
+	    io.WriteString(w, "\n")
+	    return
+	}
+	bkey := "user_" + userId + "_" + etype
+	reply, _ := redis.Hgetall(bkey)
+	for i := 0; i < len(reply.Elems); i += 2 {
+	    url := reply.Elems[i].Elem.String()
+	    if url == theUrl.String(){
+		message := make(map[string]string)
+		message["error"] = "short url already exists for this user, url, type"
+		b, _ := json.Marshal(message)
+		w.Write(b)
+		io.WriteString(w, "\n")
+		return
+	    }
+	}
+
 	if err == nil {
 		//ctr, _ := redis.Incr(COUNTER)
 		//encoded := Encode(ctr)
 		encoded := getUrl()
 		location := fmt.Sprintf("%s://%s/%s", HTTP, host, encoded)
-		fmt.Println(location)
 		kurl := store(encoded, location, theUrl.String(), eventId, userId, etype)
-		newUrl(userId, eventId, etype)
-		w.Header().Set("Content-Type", "application/json")
+		newUrl(userId, eventId, theUrl.String(),  etype)
 		w.Write(kurl.Json())
 		io.WriteString(w, "\n")
 	} else {
@@ -245,7 +241,6 @@ func getUrl() string {
 			bytes[i] = alphanum[b%byte(len(alphanum))]
 		}
 		id := string(bytes)
-		fmt.Println(id)
 		if ok, _ := redis.Hexists(id, "ShortUrl"); !ok {
 		    return id
 		}
@@ -255,28 +250,29 @@ func getUrl() string {
 func userStats(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	fmt.Println(id)
-	c, _ := redis.Get(COUNTER)
-	last := c.Int64()
 	w.Header().Set("Content-Type", "application/json")
 	stats := make(map[string]map[string]int64)
         invites := make(map[string]int64)
         shares := make(map[string]int64)
         attends := make(map[string]int64)
-	for i := last; i > 0; i -= 1 {
-	    kurl, err := load(Encode(i))
-    	    if err == nil {
-		if kurl.UserId == id {
-		    if kurl.Type == "invite"{
-			invites[kurl.LongUrl] = kurl.Clicks
-		    }
-		    if kurl.Type == "share"{
-			shares[kurl.LongUrl] = kurl.Clicks
-		    }
-		    if kurl.Type == "attend"{
-			attends[kurl.LongUrl] = kurl.Clicks
-		    }
-		}
-	    }
+	bkey := "user_" + id + "_"
+	reply, _ := redis.Hgetall(bkey + "invite")
+	for i := 0; i < len(reply.Elems); i += 2 {
+	    url := reply.Elems[i].Elem.String()
+	    clicks := reply.Elems[i+1].Elem.Int64()
+	    invites[url] = clicks
+	}
+	reply, _ = redis.Hgetall(bkey + "attend")
+	for i := 0; i < len(reply.Elems); i += 2 {
+	    url := reply.Elems[i].Elem.String()
+	    clicks := reply.Elems[i+1].Elem.Int64()
+	    attends[url] = clicks
+	}
+	reply, _ = redis.Hgetall(bkey + "share")
+	for i := 0; i < len(reply.Elems); i += 2 {
+	    url := reply.Elems[i].Elem.String()
+	    clicks := reply.Elems[i+1].Elem.Int64()
+	    shares[url] = clicks
 	}
 	stats["invites"] = invites
 	stats["shares"] = shares
@@ -287,48 +283,26 @@ func userStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func eventStats(w http.ResponseWriter, r *http.Request) {
-	url := r.FormValue("url")
-	fmt.Println(url)
-	c, _ := redis.Get(COUNTER)
-	last := c.Int64()
+	eventId := r.FormValue("eventid")
 	w.Header().Set("Content-Type", "application/json")
 	stats := make(map[string]int64)
-        var invitesCount int64 = 0
-        var invitesClicks int64 = 0
-        var sharesCount int64 = 0
-        var sharesClicks int64 = 0
-        var attendsCount int64 = 0
-        var attendsClicks int64 = 0
-	for i := last; i > 0; i -= 1 {
-	    kurl, err := load(Encode(i))
-    	    if err == nil {
-		if kurl.LongUrl == url {
-		    if kurl.Type == "invite"{
-			invitesCount += 1
-			invitesClicks += kurl.Clicks
-		    }
-		    if kurl.Type == "share"{
-			sharesCount += 1
-			sharesClicks += kurl.Clicks
-		    }
-		    if kurl.Type == "attend"{
-			attendsCount += 1
-			attendsClicks += kurl.Clicks
-		    }
-		}
-	    }
-	}
-	stats["invitesCount"] = invitesCount
-	stats["sharesCount"] = sharesCount
-	stats["attendsCount"] = attendsCount
-	stats["invitesClicks"] = invitesClicks
-	stats["sharesClicks"] = sharesClicks
-	stats["attendsClicks"] = attendsClicks
+        key := "event_" + eventId
+	invitesCount, _ := redis.Hget(key, "InviteCount") 
+	invitesClicks, _ := redis.Hget(key, "InviteClicks") 
+	sharesCount, _ := redis.Hget(key, "ShareCount") 
+	sharesClicks, _ := redis.Hget(key, "ShareClicks") 
+	attendsCount, _ := redis.Hget(key, "AttendCount") 
+	attendsClicks, _ := redis.Hget(key, "AttendClicks") 
+	stats["invitesCount"] = invitesCount.Int64()
+	stats["sharesCount"] = sharesCount.Int64()
+	stats["attendsCount"] = attendsCount.Int64()
+	stats["invitesClicks"] = invitesClicks.Int64()
+	stats["sharesClicks"] = sharesClicks.Int64()
+	stats["attendsClicks"] = attendsClicks.Int64()
 	fmt.Println(stats)
 	s, _ := json.Marshal(stats)
 	w.Write(s)
 }
-
 
 //Returns a json array with information about the last shortened urls. If data 
 // is a valid integer, that's the amount of data it will return, otherwise
@@ -383,12 +357,11 @@ func main() {
 	router.HandleFunc("/info/{short:[a-zA-Z0-9]+}", info)
 	router.HandleFunc("/latest/{data:[0-9]+}", latest)
 	router.HandleFunc("/user/{id:(.*$)}", userStats)
-	router.HandleFunc("/event/{url:(.*$)}", eventStats)
+	router.HandleFunc("/event/{eventid:(.*$)}", eventStats)
 
 	router.HandleFunc("/{fileName:(.*$)}", static)
 
 	listen := config.GetStringDefault("listen", "0.0.0.0")
-	//listen := "192.168.1.13"
 	port := config.GetStringDefault("port", "9999")
 	s := &http.Server{
 		Addr:    listen + ":" + port,
