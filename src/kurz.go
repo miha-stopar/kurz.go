@@ -197,14 +197,6 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 	theUrl, err := isValidUrl(string(leUrl))
 	userId := r.FormValue("user")
 	etype := r.FormValue("type")
-	if (etype != "attend") && (etype != "invite") && (etype != "share"){
-	    message := make(map[string]string)
-	    message["error"] = fmt.Sprintf("%s type does not exist", etype)
-	    b, _ := json.Marshal(message)
-	    w.Write(b)
-	    io.WriteString(w, "\n")
-	    return
-	}
 	bkey := "user_" + userId + "_" + etype
 	reply, _ := redis.Hgetall(bkey)
 	for i := 0; i < len(reply.Elems); i += 2 {
