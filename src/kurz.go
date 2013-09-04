@@ -22,13 +22,13 @@ const (
 	// special key in redis, that is our global counter
 	COUNTER = "__counter__"
 	HTTP    = "http"
-	ROLL    = "http://localhost:9999/index.htm"
 	alphanum = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 )
 
 var (
 	redis  *godis.Client
 	config *simpleconfig.Config
+	roll string
 )
 
 type KurzUrl struct {
@@ -116,7 +116,7 @@ func info(w http.ResponseWriter, r *http.Request) {
 		w.Write(kurl.Json())
 		io.WriteString(w, "\n")
 	} else {
-		http.Redirect(w, r, ROLL, http.StatusNotFound)
+		http.Redirect(w, r, roll, http.StatusNotFound)
 	}
 }
 
@@ -130,7 +130,7 @@ func resolve(w http.ResponseWriter, r *http.Request) {
 		//http.Redirect(w, r, kurl.LongUrl, http.StatusMovedPermanently)
 		http.Redirect(w, r, kurl.LongUrl, http.StatusTemporaryRedirect)
 	} else {
-		http.Redirect(w, r, ROLL, http.StatusTemporaryRedirect)
+		http.Redirect(w, r, roll, http.StatusTemporaryRedirect)
 	}
 }
 
@@ -191,7 +191,9 @@ func newClick(userId string, eventId string, longUrl string, etype string) {
 // function to shorten and store a url
 func shorten(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	host := config.GetStringDefault("hostname", "localhost")
+	hostname := config.GetStringDefault("listen", "localhost")
+	port := config.GetStringDefault("port", "9999")
+	host := hostname + ":" + port
 	leUrl := r.FormValue("url")
 	eventId := r.FormValue("eventid")
 	theUrl, err := isValidUrl(string(leUrl))
@@ -214,7 +216,7 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 		w.Write(kurl.Json())
 		io.WriteString(w, "\n")
 	} else {
-		http.Redirect(w, r, ROLL, http.StatusNotFound)
+		http.Redirect(w, r, roll, http.StatusNotFound)
 	}
 }
 
@@ -342,6 +344,10 @@ func main() {
 	router.HandleFunc("/event/{eventid:(.*$)}", eventStats)
 
 	router.HandleFunc("/{fileName:(.*$)}", static)
+	
+	config, _ := simpleconfig.NewConfig("../conf/kurz.conf")
+	r := config.GetStringDefault("roll", "localhost")
+	roll = r
 
 	listen := config.GetStringDefault("listen", "0.0.0.0")
 	port := config.GetStringDefault("port", "9999")
