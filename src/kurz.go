@@ -80,7 +80,6 @@ func store(key, shorturl, longurl, eventid, user, etype string) *KurzUrl {
 // loads a KurzUrl instance for the given key. If the key is
 // not found, os.Error is returned.
 func load(key string) (*KurzUrl, error) {
-	fmt.Println(key)
 	if ok, _ := redis.Hexists(key, "ShortUrl"); ok {
 		kurl := new(KurzUrl)
 		kurl.Key = key
