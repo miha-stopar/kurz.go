@@ -80,6 +80,7 @@ func store(key, shorturl, longurl, eventid, user, etype string) *KurzUrl {
 // loads a KurzUrl instance for the given key. If the key is
 // not found, os.Error is returned.
 func load(key string) (*KurzUrl, error) {
+	fmt.Println(key)
 	if ok, _ := redis.Hexists(key, "ShortUrl"); ok {
 		kurl := new(KurzUrl)
 		kurl.Key = key
@@ -220,6 +221,20 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func resolveShort(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	short := r.FormValue("short")
+	kurl, err := load(short)
+	if err == nil {
+	    w.Write(kurl.Json())
+	} else {
+	    message := make(map[string]string)	
+	    b, _ := json.Marshal(message)
+	    w.Write(b)
+	}
+	io.WriteString(w, "\n")
+}
+
 func getUrl() string {
 	bytes := make([]byte, 5)
 	for {
@@ -342,6 +357,7 @@ func main() {
 	router.HandleFunc("/latest/{data:[0-9]+}", latest)
 	router.HandleFunc("/user/{id:(.*$)}", userStats)
 	router.HandleFunc("/event/{eventid:(.*$)}", eventStats)
+	router.HandleFunc("/resolve/{short:(.*$)}", resolveShort)
 
 	router.HandleFunc("/{fileName:(.*$)}", static)
 	

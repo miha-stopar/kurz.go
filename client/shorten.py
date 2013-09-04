@@ -2,7 +2,8 @@ import requests
 import urllib
 import urllib2
 
-url = "http://localhost:9999/shorten/"
+#url = "http://localhost:9999/shorten/"
+url = "http://192.168.1.13:9999/shorten/"
 for i in range(5):
 	link = "https://github.com/" + str(i+1)
 	if i % 3 == 0:
