@@ -197,27 +197,20 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 	theUrl, err := isValidUrl(string(leUrl))
 	userId := r.FormValue("user")
 	etype := r.FormValue("type")
-	bkey := "user_" + userId + "_" + etype
-	reply, _ := redis.Hgetall(bkey)
-	for i := 0; i < len(reply.Elems); i += 2 {
-	    url := reply.Elems[i].Elem.String()
-	    if url == theUrl.String(){
-		message := make(map[string]string)
-		message["error"] = "short url already exists for this user, url, type"
-		b, _ := json.Marshal(message)
-		w.Write(b)
-		io.WriteString(w, "\n")
-		return
-	    }
-	}
-
+	var kurl *KurzUrl
 	if err == nil {
-		//ctr, _ := redis.Incr(COUNTER)
-		//encoded := Encode(ctr)
-		encoded := getUrl()
-		location := fmt.Sprintf("%s://%s/%s", HTTP, host, encoded)
-		kurl := store(encoded, location, theUrl.String(), eventId, userId, etype)
-		newUrl(userId, eventId, theUrl.String(),  etype)
+		key := userId + "_" + etype + "_" + theUrl.String()
+		shortUrl, _ := redis.Get(key)
+		if shortUrl.String() != "" {
+		    kurl, _ = load(shortUrl.String())
+		} else {
+		    encoded := getUrl()
+		    location := fmt.Sprintf("%s://%s/%s", HTTP, host, encoded)
+		    kurl = store(encoded, location, theUrl.String(), eventId, userId, etype)
+		    go redis.Set(key, encoded)
+		    newUrl(userId, eventId, theUrl.String(),  etype)
+		}
+
 		w.Write(kurl.Json())
 		io.WriteString(w, "\n")
 	} else {
@@ -241,7 +234,6 @@ func getUrl() string {
 
 func userStats(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
-	fmt.Println(id)
 	w.Header().Set("Content-Type", "application/json")
 	stats := make(map[string]map[string]int64)
         invites := make(map[string]int64)
@@ -269,7 +261,6 @@ func userStats(w http.ResponseWriter, r *http.Request) {
 	stats["invites"] = invites
 	stats["shares"] = shares
 	stats["attends"] = attends
-	fmt.Println(stats)
 	s, _ := json.Marshal(stats)
 	w.Write(s)
 }
@@ -291,7 +282,6 @@ func eventStats(w http.ResponseWriter, r *http.Request) {
 	stats["invitesClicks"] = invitesClicks.Int64()
 	stats["sharesClicks"] = sharesClicks.Int64()
 	stats["attendsClicks"] = attendsClicks.Int64()
-	fmt.Println(stats)
 	s, _ := json.Marshal(stats)
 	w.Write(s)
 }
