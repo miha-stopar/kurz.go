@@ -192,7 +192,7 @@ func newClick(userId string, eventId string, longUrl string, etype string) {
 func shorten(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	hostname := config.GetStringDefault("hostname", "localhost")
-	port := config.GetStringDefault("port", "9999")
+	port := config.GetStringDefault("shortening-port", "9999")
 	host := hostname + ":" + port
 	leUrl := r.FormValue("url")
 	eventId := r.FormValue("eventid")
