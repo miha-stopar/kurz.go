@@ -191,7 +191,7 @@ func newClick(userId string, eventId string, longUrl string, etype string) {
 // function to shorten and store a url
 func shorten(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	hostname := config.GetStringDefault("listen", "localhost")
+	hostname := config.GetStringDefault("hostname", "localhost")
 	port := config.GetStringDefault("port", "9999")
 	host := hostname + ":" + port
 	leUrl := r.FormValue("url")
