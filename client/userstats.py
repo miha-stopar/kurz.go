@@ -3,7 +3,7 @@ import urllib
 import urllib2
 import json
 
-url = "http://localhost:9999/user/"
+url = "http://192.168.1.13:9999/user/"
 for i in range(5):
 	uid = str(101+i)
 	print "user id: %s" % uid

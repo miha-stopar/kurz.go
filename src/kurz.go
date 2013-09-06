@@ -223,6 +223,8 @@ func resolveShort(w http.ResponseWriter, r *http.Request) {
 	short := r.FormValue("short")
 	kurl, err := load(short)
 	if err == nil {
+	    go redis.Hincrby(kurl.Key, "Clicks", 1)
+   	    newClick(kurl.UserId, kurl.EventId, kurl.LongUrl, kurl.Type)
 	    w.Write(kurl.Json())
 	} else {
 	    message := make(map[string]string)	
